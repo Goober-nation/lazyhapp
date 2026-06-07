@@ -1,0 +1,33 @@
+# Binaries
+lazyhapp
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binaries
+*.test
+
+# Output binaries
+bin/
+
+# Go workspace
+go.work
+go.work.sum
+
+# Dependencies
+vendor/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local environment/config
+.env

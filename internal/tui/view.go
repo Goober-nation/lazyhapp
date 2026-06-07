@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -153,7 +154,7 @@ func (m Model) renderLogs() string {
 }
 
 func (m Model) renderSystemInfo(w, h int) string {
-	sysInfo := "OS: Linux | Arch: x86_64 | Core: None\n"
+	sysInfo := fmt.Sprintf("OS: %s | Arch: %s | Core: %s\n", runtime.GOOS, runtime.GOARCH, "None")
 	sysInfo += "------------------------------------------------------------\n"
 	sysInfo += "esc: back | q: quit | Tab: cycle panels | j/k: scroll\n"
 	sysInfo += "a: add sub | d: delete sub | r: refresh | ,.: switch sub"
