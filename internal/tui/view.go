@@ -29,28 +29,24 @@ func (m Model) View() string {
 		Foreground(lipgloss.Color("63")).
 		Render(" lazyhapp v0.1.0 ")
 
-	headerHeight := 1
-	bottomHeight := 4
-	topSectionHeight := m.Height - headerHeight - bottomHeight
-
-	if topSectionHeight < 10 {
+	if m.ContentHeight < 10 {
 		return "Terminal too small"
 	}
 
 	availableWidth := m.Width - 4
 	panelWidth := availableWidth / 2
-	panelHeight := topSectionHeight / 3
+	panelHeight := m.ContentHeight / 3
 
 	leftCol := lipgloss.JoinVertical(lipgloss.Left,
 		m.renderPanel("Subscriptions", m.renderSubscriptions(panelHeight), PanelSubscriptions, panelWidth, panelHeight),
 		m.renderPanel("Nodes", m.renderNodes(panelHeight), PanelNodes, panelWidth, panelHeight),
-		m.renderPanel("Options", m.renderOptions(topSectionHeight-2*panelHeight), PanelOptions, panelWidth, topSectionHeight-2*panelHeight),
+		m.renderPanel("Options", m.renderOptions(m.ContentHeight-2*panelHeight), PanelOptions, panelWidth, m.ContentHeight-2*panelHeight),
 	)
 
-	rightCol := m.renderPanel("Logs", m.renderLogs(topSectionHeight), PanelLogs, panelWidth, topSectionHeight)
+	rightCol := m.renderPanel("Logs", m.renderLogs(m.ContentHeight), PanelLogs, panelWidth, m.ContentHeight)
 
 	topSection := lipgloss.JoinHorizontal(lipgloss.Top, leftCol, rightCol)
-	bottomPane := m.renderSystemStatusInfo(availableWidth, bottomHeight)
+	bottomPane := m.renderSystemStatusInfo(availableWidth, FooterHeight)
 
 	return lipgloss.JoinVertical(lipgloss.Left, header, topSection, bottomPane)
 }
@@ -60,10 +56,23 @@ func (m Model) renderPanel(title string, content string, id PanelID, w, h int) s
 	if m.FocusedPanel == id {
 		style = activeBorderStyle
 	}
+
+	// title (1 line) + newline (1 line) = 2 lines.
+	// Content must be at most h - 2 lines to fit in height h.
+	contentLines := strings.Split(content, "\n")
+	if len(contentLines) > h-2 {
+		if h-2 < 0 {
+			contentLines = []string{}
+		} else {
+			contentLines = contentLines[:h-2]
+		}
+	}
+	finalContent := strings.Join(contentLines, "\n")
+
 	return style.
 		Width(w).
 		Height(h).
-		Render(fmt.Sprintf("%s\n%s", titleStyle.Render(title), content))
+		Render(fmt.Sprintf("%s\n%s", titleStyle.Render(title), finalContent))
 }
 
 func (m Model) renderSubscriptions(h int) string {
@@ -110,11 +119,6 @@ func (m Model) renderSubscriptions(h int) string {
 		sb.WriteString(fmt.Sprintf("Name for %s:\n%s_", m.tempSubUrl, m.ModalInput))
 	} else {
 		sb.WriteString("\n")
-	}
-	lines := strings.Split(sb.String(), "\n")
-
-	if len(lines) > h {
-		return strings.Join(lines[:h], "\n")
 	}
 	return sb.String()
 }
@@ -169,10 +173,6 @@ func (m Model) renderNodes(h int) string {
 		}
 		sb.WriteString(fmt.Sprintf("%s %s %s (%dms)\n", prefix, checkbox, node.Name, node.LastMeasuredPing))
 	}
-	lines := strings.Split(sb.String(), "\n")
-	if len(lines) > h {
-		return strings.Join(lines[:h], "\n")
-	}
 	return sb.String()
 }
 
@@ -200,10 +200,6 @@ func (m Model) renderOptions(h int) string {
 		sb.WriteString(fmt.Sprintf("%s %s\n", prefix, opt))
 	}
 	sb.WriteString("\n(o: change option)")
-	lines := strings.Split(sb.String(), "\n")
-	if len(lines) > h {
-		return strings.Join(lines[:h], "\n")
-	}
 	return sb.String()
 }
 

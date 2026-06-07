@@ -13,12 +13,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
 		m.Height = msg.Height
-		contentHeight := m.Height - 6
-		if contentHeight >= 15 {
+		m.ContentHeight = m.Height - HeaderHeight - FooterHeight
+
+		if m.ContentHeight >= 15 {
 			availableWidth := m.Width - 4
 			panelWidth := availableWidth / 2
 			m.LogViewport.Width = panelWidth
-			m.LogViewport.Height = contentHeight
+			m.LogViewport.Height = m.ContentHeight
 		}
 		return m, nil
 

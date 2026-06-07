@@ -11,6 +11,11 @@ import (
 	"github.com/charmbracelet/bubbletea"
 )
 
+const (
+	HeaderHeight = 1
+	FooterHeight = 4
+)
+
 type PanelID int
 
 const (
@@ -41,8 +46,9 @@ type Model struct {
 	VpnLogChan  chan string
 
 	// Layout
-	Width  int
-	Height int
+	Width         int
+	Height        int
+	ContentHeight int
 
 	// Modals
 	ActiveModal string // "add_sub", "add_sub_name", "remove_sub", "help", "reset_confirm"
