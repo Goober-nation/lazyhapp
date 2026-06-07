@@ -25,6 +25,9 @@ type Node struct {
 type AppState struct {
 	Subscriptions []Subscription `json:"subscriptions"`
 	Nodes         []Node         `json:"nodes"`
+	Logs          []string       `json:"logs"`
+	VpnPid        int            `json:"vpn_pid"`
+	CurrentNode   string         `json:"current_node"`
 }
 
 var configDirOverride string

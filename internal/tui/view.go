@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"lazyhapp/internal/core"
 	"runtime"
 	"strings"
 
@@ -23,35 +24,39 @@ var (
 )
 
 func (m Model) View() string {
-	// Account for header (1) + newline (1) + top/bottom padding (5+5 = 10)
-	contentHeight := m.Height - 12
-	if contentHeight < 10 {
+	// Reduced overhead for height calculation
+	contentHeight := m.Height - 6
+	if contentHeight < 15 {
 		return "Terminal too small"
 	}
-
-	// Account for left/right padding (5+5 = 10)
-	availableWidth := m.Width - 10
+	
+	availableWidth := m.Width - 4
 	panelWidth := availableWidth / 2
-	panelHeight := contentHeight / 3
-
-	topLeft := m.renderPanel("Subscriptions", m.renderSubscriptions(), PanelSubscriptions, panelWidth, panelHeight)
-	topRight := m.renderPanel("Status", m.renderStatus(), PanelStatus, panelWidth, panelHeight)
-	midLeft := m.renderPanel("Nodes", m.renderNodes(), PanelNodes, panelWidth, panelHeight)
-	midRight := m.renderPanel("Logs", m.renderLogs(), PanelLogs, panelWidth, panelHeight)
+	panelHeight := contentHeight / 4
 	
-	bottomPane := m.renderSystemInfo(availableWidth, panelHeight)
-
-	topRow := lipgloss.JoinHorizontal(lipgloss.Top, topLeft, topRight)
-	middleRow := lipgloss.JoinHorizontal(lipgloss.Top, midLeft, midRight)
-
-	mainView := lipgloss.JoinVertical(lipgloss.Left, topRow, middleRow, bottomPane)
+	// Left Side: Subscriptions -> Nodes -> Options
+	leftCol := lipgloss.JoinVertical(lipgloss.Left, 
+		m.renderPanel("Subscriptions", m.renderSubscriptions(panelHeight), PanelSubscriptions, panelWidth, panelHeight),
+		m.renderPanel("Nodes", m.renderNodes(panelHeight), PanelNodes, panelWidth, panelHeight),
+		m.renderPanel("Options", m.renderOptions(panelHeight), PanelOptions, panelWidth, panelHeight),
+	)
 	
-	// Apply padding around the calculated content
+	// Right Side: Logs (spans 3 panels height to match leftCol)
+	rightCol := m.renderPanel("Logs", m.renderLogs(panelHeight*3), PanelLogs, panelWidth, panelHeight*3)
+	
+	topSection := lipgloss.JoinHorizontal(lipgloss.Top, leftCol, rightCol)
+	bottomPane := m.renderSystemStatusInfo(availableWidth, panelHeight)
+	
+	mainView := lipgloss.JoinVertical(lipgloss.Left, topSection, bottomPane)
+	
 	finalView := lipgloss.NewStyle().
-		Padding(5, 5).
+		Padding(0, 0).
 		Render(mainView)
-
-	header := " lazyhapp v0.1.0 "
+	
+	header := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("63")).
+		Render(" lazyhapp v0.1.0 ")
 	
 	return fmt.Sprintf("%s\n%s", header, finalView)
 }
@@ -61,20 +66,35 @@ func (m Model) renderPanel(title string, content string, id PanelID, w, h int) s
 	if m.FocusedPanel == id {
 		style = activeBorderStyle
 	}
-
 	return style.
 		Width(w).
 		Height(h).
 		Render(fmt.Sprintf("%s\n%s", titleStyle.Render(title), content))
 }
 
-func (m Model) renderSubscriptions() string {
+func (m Model) renderSubscriptions(h int) string {
 	var sb strings.Builder
-	
+	availableLines := h - 2
+	if availableLines < 0 {
+		availableLines = 0
+	}
 	if len(m.State.Subscriptions) == 0 {
 		sb.WriteString("No subscriptions added.\n")
 	} else {
-		for i, sub := range m.State.Subscriptions {
+		start := m.SelectedSub - (availableLines / 2)
+		if start < 0 {
+			start = 0
+		}
+		end := start + availableLines
+		if end > len(m.State.Subscriptions) {
+			end = len(m.State.Subscriptions)
+			start = end - availableLines
+			if start < 0 {
+				start = 0
+			}
+		}
+		for i := start; i < end; i++ {
+			sub := m.State.Subscriptions[i]
 			prefix := "[ ]"
 			if i == m.SelectedSub {
 				prefix = "->"
@@ -82,90 +102,166 @@ func (m Model) renderSubscriptions() string {
 			sb.WriteString(fmt.Sprintf("%s %s\n", prefix, sub.Name))
 		}
 	}
-
 	if m.ActiveModal == "add_sub" {
 		sb.WriteString("\n" + strings.Repeat("-", 10) + "\n")
 		sb.WriteString(fmt.Sprintf("URL: %s_", m.ModalInput))
+	} else if m.ActiveModal == "reset_confirm" {
+		sb.WriteString("\n" + strings.Repeat("-", 10) + "\n")
+		sb.WriteString("Reset all data? (enter: yes / esc: no)")
+	} else if m.ActiveModal == "remove_sub" {
+		sb.WriteString("\n" + strings.Repeat("-", 10) + "\n")
+		sb.WriteString("Delete subscription? (enter: yes / esc: no)")
+	} else if m.ActiveModal == "add_sub_name" {
+		sb.WriteString("\n" + strings.Repeat("-", 10) + "\n")
+		sb.WriteString(fmt.Sprintf("Name for %s:\n%s_", m.tempSubUrl, m.ModalInput))
 	} else {
-		sb.WriteString("\n(a: add sub)")
+		sb.WriteString("\n")
 	}
+	lines := strings.Split(sb.String(), "\n")
 
+	if len(lines) > h {
+		return strings.Join(lines[:h], "\n")
+	}
 	return sb.String()
 }
 
-func (m Model) renderNodes() string {
+func (m Model) renderNodes(h int) string {
 	if len(m.State.Subscriptions) == 0 || m.SelectedSub < 0 {
 		return "Select a subscription first"
 	}
-	
 	subID := m.State.Subscriptions[m.SelectedSub].ID
-	var sb strings.Builder
-	found := false
-	for i, node := range m.State.Nodes {
+	var filteredNodes []core.Node
+	for _, node := range m.State.Nodes {
 		if node.SubscriptionID == subID {
-			found = true
-			prefix := "[ ]"
-			if i == m.SelectedNode {
-				prefix = "->"
-			}
-			sb.WriteString(fmt.Sprintf("%s %s (%dms)\n", prefix, node.Name, node.LastMeasuredPing))
+			filteredNodes = append(filteredNodes, node)
 		}
 	}
-	if !found {
+	if len(filteredNodes) == 0 {
 		return "No nodes found for this subscription"
+	}
+	var sb strings.Builder
+	availableLines := h - 1
+	if availableLines < 0 {
+		availableLines = 0
+	}
+	relativeSelected := m.SelectedNode
+	if relativeSelected < 0 {
+		relativeSelected = 0
+	}
+	if relativeSelected >= len(filteredNodes) {
+		relativeSelected = len(filteredNodes) - 1
+	}
+	start := relativeSelected - (availableLines / 2)
+	if start < 0 {
+		start = 0
+	}
+	end := start + availableLines
+	if end > len(filteredNodes) {
+		end = len(filteredNodes)
+		start = end - availableLines
+		if start < 0 {
+			start = 0
+		}
+	}
+	for i := start; i < end; i++ {
+		node := filteredNodes[i]
+		checkbox := "[ ]"
+		if m.Connected && m.CurrentNode == node.Name {
+			checkbox = "[x]"
+		}
+		prefix := "  "
+		if i == relativeSelected {
+			prefix = "->"
+		}
+		sb.WriteString(fmt.Sprintf("%s %s %s (%dms)\n", prefix, checkbox, node.Name, node.LastMeasuredPing))
+	}
+	lines := strings.Split(sb.String(), "\n")
+	if len(lines) > h {
+		return strings.Join(lines[:h], "\n")
 	}
 	return sb.String()
 }
 
-func (m Model) renderStatus() string {
+func (m Model) renderLogs(h int) string {
+	if len(m.Logs) == 0 {
+		return "No logs available."
+	}
+	var sb strings.Builder
+	start := 0
+	if len(m.Logs) > h {
+		start = len(m.Logs) - h
+	}
+	for _, log := range m.Logs[start:] {
+		sb.WriteString(log + "\n")
+	}
+	lines := strings.Split(sb.String(), "\n")
+	if len(lines) > h {
+		return strings.Join(lines[:h], "\n")
+	}
+	return sb.String()
+}
+
+func (m Model) renderOptions(h int) string {
+	options := []string{
+		"Auto-ping nodes: Enabled",
+		"Default Protocol: Hysteria2",
+		"Log level: Info",
+		"DNS: System Default",
+	}
+	var sb strings.Builder
+	sb.WriteString("Configuration:\n")
+	for i, opt := range options {
+		prefix := "[ ]"
+		if i == m.SelectedOption {
+			prefix = "->"
+		}
+		sb.WriteString(fmt.Sprintf("%s %s\n", prefix, opt))
+	}
+	sb.WriteString("\n(o: change option)")
+	lines := strings.Split(sb.String(), "\n")
+	if len(lines) > h {
+		return strings.Join(lines[:h], "\n")
+	}
+	return sb.String()
+}
+
+func (m Model) renderSystemStatusInfo(w, h int) string {
 	status := "DISCONNECTED"
 	if m.Connected {
 		status = "CONNECTED"
 	}
-	
 	node := "None"
 	if m.CurrentNode != "" {
 		node = m.CurrentNode
 	}
-
 	protocol := "N/A"
 	if m.Connected {
 		protocol = "Hysteria2"
 	}
-
-	return fmt.Sprintf("Status: %s\nCurrent Node: %s\nProtocol: %s\nPing: -- | Uptime: 00:00:00", status, node, protocol)
-}
-
-func (m Model) renderLogs() string {
-	if len(m.Logs) == 0 {
-		return "No logs available."
-	}
 	
-	var sb strings.Builder
-	start := 0
-	if len(m.Logs) > 10 {
-		start = len(m.Logs) - 10
+	// Mock stats
+	up := "0 KB/s"
+	down := "0 KB/s"
+	if m.Connected {
+		up = m.UpSpeed
+		down = m.DownSpeed
 	}
-	
-	for _, log := range m.Logs[start:] {
-		sb.WriteString(log + "\n")
-	}
-	return sb.String()
-}
 
-func (m Model) renderSystemInfo(w, h int) string {
-	sysInfo := fmt.Sprintf("OS: %s | Arch: %s | Core: %s\n", runtime.GOOS, runtime.GOARCH, "None")
+	sysInfo := fmt.Sprintf("Status: %s | Node: %s | Protocol: %s | Up: %s | Down: %s\n", status, node, protocol, up, down)
+	sysInfo += fmt.Sprintf("OS: %s | Arch: %s\n", runtime.GOOS, runtime.GOARCH)
 	sysInfo += "------------------------------------------------------------\n"
 	sysInfo += "esc: back | q: quit | Tab: cycle panels | j/k: scroll\n"
-	sysInfo += "a: add sub | d: delete sub | r: refresh | ,.: switch sub"
-	
+	sysInfo += "a: add sub | d: delete sub | r: refresh | ,.: switch sub\n"
+	sysInfo += "p: ping all | c: disconnect | o: change option"
 	style := borderStyle
 	if m.FocusedPanel == PanelSystemInfo {
 		style = activeBorderStyle
 	}
-	
 	return style.
 		Width(w).
 		Height(h).
 		Render(sysInfo)
 }
+
+func (m Model) renderStatus() string { return "" }
+func (m Model) renderSystemInfo(w, h int) string { return "" }
