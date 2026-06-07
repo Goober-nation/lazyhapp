@@ -24,7 +24,6 @@ var (
 )
 
 func (m Model) View() string {
-	// Reduced overhead for height calculation
 	contentHeight := m.Height - 6
 	if contentHeight < 15 {
 		return "Terminal too small"
@@ -34,14 +33,12 @@ func (m Model) View() string {
 	panelWidth := availableWidth / 2
 	panelHeight := contentHeight / 4
 	
-	// Left Side: Subscriptions -> Nodes -> Options
 	leftCol := lipgloss.JoinVertical(lipgloss.Left, 
 		m.renderPanel("Subscriptions", m.renderSubscriptions(panelHeight), PanelSubscriptions, panelWidth, panelHeight),
 		m.renderPanel("Nodes", m.renderNodes(panelHeight), PanelNodes, panelWidth, panelHeight),
 		m.renderPanel("Options", m.renderOptions(panelHeight), PanelOptions, panelWidth, panelHeight),
 	)
 	
-	// Right Side: Logs (spans 3 panels height to match leftCol)
 	rightCol := m.renderPanel("Logs", m.renderLogs(panelHeight*3), PanelLogs, panelWidth, panelHeight*3)
 	
 	topSection := lipgloss.JoinHorizontal(lipgloss.Top, leftCol, rightCol)
@@ -186,17 +183,24 @@ func (m Model) renderLogs(h int) string {
 	if len(m.Logs) == 0 {
 		return "No logs available."
 	}
-	var sb strings.Builder
+	availableLines := h - 1
+	if availableLines < 0 {
+		availableLines = 0
+	}
+
 	start := 0
-	if len(m.Logs) > h {
-		start = len(m.Logs) - h
+	if len(m.Logs) > availableLines {
+		start = len(m.Logs) - availableLines
 	}
+
+	var sb strings.Builder
+	availableWidth := m.Width - 4
 	for _, log := range m.Logs[start:] {
-		sb.WriteString(log + "\n")
-	}
-	lines := strings.Split(sb.String(), "\n")
-	if len(lines) > h {
-		return strings.Join(lines[:h], "\n")
+		if len(log) > availableWidth {
+			sb.WriteString(log[:availableWidth-3] + "...\n")
+		} else {
+			sb.WriteString(log + "\n")
+		}
 	}
 	return sb.String()
 }
@@ -239,14 +243,13 @@ func (m Model) renderSystemStatusInfo(w, h int) string {
 		protocol = "Hysteria2"
 	}
 	
-	// Mock stats
 	up := "0 KB/s"
 	down := "0 KB/s"
 	if m.Connected {
 		up = m.UpSpeed
 		down = m.DownSpeed
 	}
-
+	
 	sysInfo := fmt.Sprintf("Status: %s | Node: %s | Protocol: %s | Up: %s | Down: %s\n", status, node, protocol, up, down)
 	sysInfo += fmt.Sprintf("OS: %s | Arch: %s\n", runtime.GOOS, runtime.GOARCH)
 	sysInfo += "------------------------------------------------------------\n"

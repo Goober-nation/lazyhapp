@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"lazyhapp/internal/core"
+	"lazyhapp/internal/logger"
 	"os"
 	"bufio"
 	"io"
@@ -96,9 +97,7 @@ func readLogFile(offset int64) ([]string, int64) {
 }
 
 func (m Model) addLog(msg string) {
-	m.Logs = append(m.Logs, msg)
-	m.State.Logs = m.Logs
-	core.SaveState(m.State)
+	logger.Info("TUI", msg)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -353,6 +352,9 @@ func (m *Model) handleModalInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.State.CurrentNode = ""
 			
 			os.Remove("lazyhapp.log")
+			if err := logger.Reset(); err != nil {
+				m.addLog(fmt.Sprintf("Logger reset failed: %v", err))
+			}
 			m.Logs = []string{}
 			m.LogOffset = 0
 			

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"lazyhapp/internal/logger"
 	"lazyhapp/internal/tui"
 	"os"
 	"os/exec"
@@ -30,6 +31,12 @@ func main() {
 		}
 		os.Exit(0)
 	}
+
+	if err := logger.Init(); err != nil {
+		fmt.Printf("Failed to initialize logger: %v\n", err)
+		os.Exit(1)
+	}
+	defer logger.Close()
 
 	m := tui.InitialModel()
 	

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"lazyhapp/internal/logger"
 	"net/http"
 	"net/url"
 	"strings"
@@ -26,13 +27,16 @@ type NodeData struct {
 }
 
 func FetchSubscription(urlStr string, name string) ([]Subscription, []Node, error) {
+	logger.Info("CORE", fmt.Sprintf("Fetching subscription: %s", urlStr))
 	resp, err := http.Get(urlStr)
 	if err != nil {
+		logger.Error("CORE", fmt.Sprintf("Network error fetching %s: %v", urlStr, err))
 		return nil, nil, fmt.Errorf("network error: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		logger.Error("CORE", fmt.Sprintf("Server returned status %d for %s", resp.StatusCode, urlStr))
 		return nil, nil, fmt.Errorf("server returned status %d", resp.StatusCode)
 	}
 

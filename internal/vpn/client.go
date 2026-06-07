@@ -3,6 +3,7 @@ package vpn
 import (
 	"context"
 	"fmt"
+	"lazyhapp/internal/logger"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,28 +27,12 @@ func (c *Client) generateXrayConfig(payload string) (string, error) {
 
 	configPath := filepath.Join(configDir, "config.json")
 	
-	configContent := fmt.Sprintf(`{
-		"log": {
-			"access": "/dev/stdout",
-			"error": "/dev/stdout",
-			"loglevel": "info"
-		},
-		"inbounds": [{
-			"type": "tun",
-			"settings": { "address": ["10.0.0.1/24"], "mtu": 1500 },
-			"sniffing": { "enabled": true, "destOverride": ["http", "tls"] }
-		}],
-		"outbounds": [
-			{
-				"protocol": "vless", 
-				"settings": { "vnext": [{ "address": "placeholder", "port": 443, "users": [{ "id": "placeholder" }] }] },
-				"streamSettings": { "network": "tcp", "security": "reality" }
-			},
-			{ "protocol": "freedom", "tag": "direct" }
-		]
-	}`)
+	configContent, err := ConvertURIToXrayConfig(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to convert URI to config: %w", err)
+	}
 
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(configPath, configContent, 0644); err != nil {
 		return "", err
 	}
 
@@ -55,18 +40,21 @@ func (c *Client) generateXrayConfig(payload string) (string, error) {
 }
 
 func (c *Client) Connect(ctx context.Context, configPayload string) (int, error) {
+	logger.Info("VPN", "Starting connection process...")
 	c.Disconnect(0)
 
 	isRoot := os.Geteuid() == 0
 
 	configPath, err := c.generateXrayConfig(configPayload)
 	if err != nil {
+		logger.Error("VPN", fmt.Sprintf("Failed to generate config: %v", err))
 		return 0, fmt.Errorf("failed to generate config: %w", err)
 	}
 	c.configPath = configPath
 
 	binaryPath, err := ResolveBinaryPath()
 	if err != nil {
+		logger.Error("VPN", fmt.Sprintf("Failed to resolve binary: %v", err))
 		return 0, fmt.Errorf("failed to resolve xray binary: %w", err)
 	}
 
@@ -94,19 +82,17 @@ func (c *Client) Connect(ctx context.Context, configPayload string) (int, error)
 	c.cmd = cmd
 	err = c.cmd.Start()
 	if err != nil {
+		logger.Error("VPN", fmt.Sprintf("Failed to start Xray: %v", err))
 		logFile.Close()
 		return 0, fmt.Errorf("failed to start Xray core: %w", err)
 	}
 
-	// We don't close logFile here because it's used by the process
-	// but we should probably keep a reference to close it on disconnect
-	// However, since we use cmd.Stdout, the process handles it.
-	// Actually, better to let the OS handle the file descriptor of the child.
-
+	logger.Info("VPN", fmt.Sprintf("Xray started successfully with PID %d", c.cmd.Process.Pid))
 	return c.cmd.Process.Pid, nil
 }
 
 func (c *Client) Disconnect(pid int) error {
+	logger.Info("VPN", fmt.Sprintf("Disconnecting PID %d...", pid))
 	targetPid := pid
 	if targetPid == 0 && c.cmd != nil && c.cmd.Process != nil {
 		targetPid = c.cmd.Process.Pid
@@ -122,6 +108,11 @@ func (c *Client) Disconnect(pid int) error {
 	}
 
 	err = proc.Kill()
+	if err != nil {
+		logger.Error("VPN", fmt.Sprintf("Failed to kill process %d: %v", targetPid, err))
+	} else {
+		logger.Info("VPN", fmt.Sprintf("Process %d killed", targetPid))
+	}
 	c.cmd = nil
 	return err
 }
