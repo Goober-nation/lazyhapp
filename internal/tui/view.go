@@ -35,15 +35,15 @@ func (m Model) View() string {
 
 	availableWidth := m.Width - 4
 	panelWidth := availableWidth / 2
-	panelHeight := m.ContentHeight / 3
+	panelHeight := m.ContentHeight / 4
 
 	leftCol := lipgloss.JoinVertical(lipgloss.Left,
 		m.renderPanel("Subscriptions", m.renderSubscriptions(panelHeight), PanelSubscriptions, panelWidth, panelHeight),
 		m.renderPanel("Nodes", m.renderNodes(panelHeight), PanelNodes, panelWidth, panelHeight),
-		m.renderPanel("Options", m.renderOptions(m.ContentHeight-2*panelHeight), PanelOptions, panelWidth, m.ContentHeight-2*panelHeight),
+		m.renderPanel("Options", m.renderOptions(m.ContentHeight-2*panelHeight), PanelOptions, panelWidth, panelHeight),
 	)
 
-	rightCol := m.renderPanel("Logs", m.renderLogs(m.ContentHeight), PanelLogs, panelWidth, m.ContentHeight)
+	rightCol := m.renderPanel("Logs", m.renderLogs(m.ContentHeight), PanelLogs, panelWidth, panelHeight*3)
 
 	topSection := lipgloss.JoinHorizontal(lipgloss.Top, leftCol, rightCol)
 	bottomPane := m.renderSystemStatusInfo(availableWidth, FooterHeight)
