@@ -73,13 +73,13 @@ func processStructuredData(data SubscriptionResponse, url string, name string) (
 	var nodes []Node
 	
 	for i, sd := range data.Subscriptions {
-		subID := fmt.Sprintf("sub-%d", i)
+		subID := fmt.Sprintf("sub-%s-%s-%d", strings.ReplaceAll(url, "/", "-"), strings.ReplaceAll(name, " ", "-"), i)
 		
 		var filteredNodes []Node
 		for j, nd := range sd.Nodes {
 			if isValidVPNNode(nd.Payload) {
 				filteredNodes = append(filteredNodes, Node{
-					ID:             fmt.Sprintf("node-%d-%d", i, j),
+					ID:             fmt.Sprintf("node-%s-%d", subID, j),
 					SubscriptionID: subID,
 					Name:           nd.Name,
 					Protocol:       nd.Protocol,
@@ -134,7 +134,7 @@ func processLinkList(content, subURL string, name string) ([]Subscription, []Nod
 	lines := strings.Split(content, "\n")
 	var nodes []Node
 	
-	subID := "generic-sub"
+	subID := fmt.Sprintf("sub-%s-%s", strings.ReplaceAll(subURL, "/", "-"), strings.ReplaceAll(name, " ", "-"))
 	
 	for i, line := range lines {
 		line = strings.TrimSpace(line)
@@ -157,7 +157,7 @@ func processLinkList(content, subURL string, name string) ([]Subscription, []Nod
 		}
 		
 		nodes = append(nodes, Node{
-			ID:             fmt.Sprintf("node-gen-%d", i),
+			ID:             fmt.Sprintf("node-%s-%d", subID, i),
 			SubscriptionID: subID,
 			Name:           nodeName,
 			Protocol:       u.Scheme,

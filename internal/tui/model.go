@@ -4,8 +4,10 @@ import (
 	"lazyhapp/internal/core"
 	"lazyhapp/internal/vpn"
 	"os"
+	"strings"
 	"syscall"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/bubbletea"
 )
 
@@ -21,12 +23,12 @@ const (
 )
 
 type Model struct {
-	State       *core.AppState
-	FocusedPanel PanelID
-	SelectedSub  int
-	SelectedNode int
+	State          *core.AppState
+	FocusedPanel   PanelID
+	SelectedSub    int
+	SelectedNode   int
 	SelectedOption int // Index of selected option in Options panel
-	
+
 	// Scroll Offsets
 	SubScrollOffset  int
 	NodeScrollOffset int
@@ -39,8 +41,8 @@ type Model struct {
 	VpnLogChan  chan string
 
 	// Layout
-	Width       int
-	Height      int
+	Width  int
+	Height int
 
 	// Modals
 	ActiveModal string // "add_sub", "add_sub_name", "remove_sub", "help", "reset_confirm"
@@ -48,17 +50,20 @@ type Model struct {
 	tempSubUrl  string
 
 	// Logs
-	Logs        []string
-	LogOffset   int64
+	Logs      []string
+	LogOffset int64
+
+	// Viewport for logs
+	LogViewport viewport.Model
 
 	// Stats
-	UpSpeed     string
-	DownSpeed   string
+	UpSpeed   string
+	DownSpeed string
 }
 
 func InitialModel() Model {
 	state, _ := core.LoadState()
-	
+
 	connected := false
 	if state.VpnPid != 0 {
 		proc, err := os.FindProcess(state.VpnPid)
@@ -68,6 +73,9 @@ func InitialModel() Model {
 			}
 		}
 	}
+
+	vp := viewport.New(0, 0)
+	vp.SetContent(strings.Join(state.Logs, "\n"))
 
 	return Model{
 		State:        state,
@@ -79,6 +87,7 @@ func InitialModel() Model {
 		Connected:    connected,
 		CurrentNode:  state.CurrentNode,
 		VpnLogChan:   make(chan string, 100),
+		LogViewport:  vp,
 	}
 }
 

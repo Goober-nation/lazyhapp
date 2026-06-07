@@ -24,38 +24,35 @@ var (
 )
 
 func (m Model) View() string {
-	contentHeight := m.Height - 6
-	if contentHeight < 15 {
-		return "Terminal too small"
-	}
-	
-	availableWidth := m.Width - 4
-	panelWidth := availableWidth / 2
-	panelHeight := contentHeight / 4
-	
-	leftCol := lipgloss.JoinVertical(lipgloss.Left, 
-		m.renderPanel("Subscriptions", m.renderSubscriptions(panelHeight), PanelSubscriptions, panelWidth, panelHeight),
-		m.renderPanel("Nodes", m.renderNodes(panelHeight), PanelNodes, panelWidth, panelHeight),
-		m.renderPanel("Options", m.renderOptions(panelHeight), PanelOptions, panelWidth, panelHeight),
-	)
-	
-	rightCol := m.renderPanel("Logs", m.renderLogs(panelHeight*3), PanelLogs, panelWidth, panelHeight*3)
-	
-	topSection := lipgloss.JoinHorizontal(lipgloss.Top, leftCol, rightCol)
-	bottomPane := m.renderSystemStatusInfo(availableWidth, panelHeight)
-	
-	mainView := lipgloss.JoinVertical(lipgloss.Left, topSection, bottomPane)
-	
-	finalView := lipgloss.NewStyle().
-		Padding(0, 0).
-		Render(mainView)
-	
 	header := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("63")).
 		Render(" lazyhapp v0.1.0 ")
-	
-	return fmt.Sprintf("%s\n%s", header, finalView)
+
+	headerHeight := 1
+	bottomHeight := 4
+	topSectionHeight := m.Height - headerHeight - bottomHeight
+
+	if topSectionHeight < 10 {
+		return "Terminal too small"
+	}
+
+	availableWidth := m.Width - 4
+	panelWidth := availableWidth / 2
+	panelHeight := topSectionHeight / 3
+
+	leftCol := lipgloss.JoinVertical(lipgloss.Left,
+		m.renderPanel("Subscriptions", m.renderSubscriptions(panelHeight), PanelSubscriptions, panelWidth, panelHeight),
+		m.renderPanel("Nodes", m.renderNodes(panelHeight), PanelNodes, panelWidth, panelHeight),
+		m.renderPanel("Options", m.renderOptions(topSectionHeight-2*panelHeight), PanelOptions, panelWidth, topSectionHeight-2*panelHeight),
+	)
+
+	rightCol := m.renderPanel("Logs", m.renderLogs(topSectionHeight), PanelLogs, panelWidth, topSectionHeight)
+
+	topSection := lipgloss.JoinHorizontal(lipgloss.Top, leftCol, rightCol)
+	bottomPane := m.renderSystemStatusInfo(availableWidth, bottomHeight)
+
+	return lipgloss.JoinVertical(lipgloss.Left, header, topSection, bottomPane)
 }
 
 func (m Model) renderPanel(title string, content string, id PanelID, w, h int) string {
@@ -183,26 +180,7 @@ func (m Model) renderLogs(h int) string {
 	if len(m.Logs) == 0 {
 		return "No logs available."
 	}
-	availableLines := h - 1
-	if availableLines < 0 {
-		availableLines = 0
-	}
-
-	start := 0
-	if len(m.Logs) > availableLines {
-		start = len(m.Logs) - availableLines
-	}
-
-	var sb strings.Builder
-	availableWidth := m.Width - 4
-	for _, log := range m.Logs[start:] {
-		if len(log) > availableWidth {
-			sb.WriteString(log[:availableWidth-3] + "...\n")
-		} else {
-			sb.WriteString(log + "\n")
-		}
-	}
-	return sb.String()
+	return m.LogViewport.View()
 }
 
 func (m Model) renderOptions(h int) string {
@@ -242,14 +220,14 @@ func (m Model) renderSystemStatusInfo(w, h int) string {
 	if m.Connected {
 		protocol = "Hysteria2"
 	}
-	
+
 	up := "0 KB/s"
 	down := "0 KB/s"
 	if m.Connected {
 		up = m.UpSpeed
 		down = m.DownSpeed
 	}
-	
+
 	sysInfo := fmt.Sprintf("Status: %s | Node: %s | Protocol: %s | Up: %s | Down: %s\n", status, node, protocol, up, down)
 	sysInfo += fmt.Sprintf("OS: %s | Arch: %s\n", runtime.GOOS, runtime.GOARCH)
 	sysInfo += "------------------------------------------------------------\n"
